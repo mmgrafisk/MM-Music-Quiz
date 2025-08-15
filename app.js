@@ -1,4 +1,5 @@
-// Rock Quiz – Lokal (ingen login) + Importer playlist + Auto-token fallback (localhost:8787/token).
+// Rock Quiz – Lokal (ingen login) + Importer playlist + Auto-token fallback
+
 const AUTO_TOKEN_URL = 'http://localhost:8787/token';
 
 const state = {
@@ -47,6 +48,8 @@ const timeLimitInput = document.getElementById('timeLimitInput');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 
 const playlistInput = document.getElementById('playlistInput');
+const importTokenInput = document.getElementById('importTokenInput');
+const keepNoPreview = document.getElementById('keepNoPreview');
 const runImportBtn = document.getElementById('runImportBtn');
 const importStatus = document.getElementById('importStatus');
 
@@ -80,13 +83,15 @@ async function init(){
   els.settingsBtn.addEventListener('click', () => settingsModal.showModal());
   els.helpBtn.addEventListener('click', () => helpModal.showModal());
   els.importBtn.addEventListener('click', () => {
+    importTokenInput.value = state.token || '';
     playlistInput.value = '';
+    keepNoPreview.checked = false;
     importStatus.textContent = '';
     importModal.showModal();
   });
-  els.downloadBtn?.addEventListener('click', downloadTracksJson);
+  els.downloadBtn.addEventListener('click', downloadTracksJson);
 
-  saveSettingsBtn.addEventListener('click', async (e)=> {
+  saveSettingsBtn.addEventListener('click', (e)=> {
     e.preventDefault();
     const token = tokenInput.value.trim();
     const trounds = parseInt(roundsInput.value, 10) || 10;
@@ -100,28 +105,12 @@ async function init(){
     settingsModal.close();
   });
 
-  // Load tracks.json if present
+  // Indlæs tracks.json hvis den findes
   await loadTracks();
   newGame();
 }
 
 function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
-
-async function ensureToken(){
-  if (state.token) return state.token;
-  try{
-    const r = await fetch(AUTO_TOKEN_URL, {cache: 'no-store'});
-    if(!r.ok) throw new Error('Proxy svarede ikke');
-    const j = await r.json();
-    state.token = j.access_token;
-    const saved = JSON.parse(localStorage.getItem('rockquiz.settings') || '{}');
-    localStorage.setItem('rockquiz.settings', JSON.stringify({...saved, token: state.token}));
-    return state.token;
-  }catch(e){
-    console.warn('Auto-token fejlede:', e.message || e);
-    return null;
-  }
-}
 
 async function loadTracks(){
   try{
@@ -141,10 +130,10 @@ async function loadTracks(){
 function renderTrackList(){
   els.trackList.innerHTML = '';
   if (!state.tracks.length){
-    els.downloadBtn?.setAttribute('disabled','');
+    els.downloadBtn.disabled = true;
     return;
   }
-  els.downloadBtn?.removeAttribute('disabled');
+  els.downloadBtn.disabled = false;
   state.tracks.forEach(t => {
     const item = document.createElement('div');
     item.className = 'trackitem';
@@ -315,24 +304,23 @@ function stopTimer(){
 }
 
 // -------------------- Importer playlist (browser) --------------------
-document.getElementById('runImportBtn')?.addEventListener('click', async (e) => {
+runImportBtn?.addEventListener('click', async (e) => {
   e.preventDefault();
   importStatus.textContent = 'Henter playlist…';
   const id = extractPlaylistId(playlistInput.value.trim());
-  if (!id){
-    importStatus.textContent = 'Manglende playlist‑ID/URL.';
-    return;
-  }
-  const token = (state.token || await ensureToken());
-  if (!token){
-    importStatus.textContent = 'Intet token (proxy kører måske ikke).';
+  // Brug manuelt indsat token hvis det er udfyldt, ellers hent fra proxy
+  state.token = (importTokenInput.value || '').trim() || (await ensureToken());
+  if (!id || !state.token){
+    importStatus.textContent = 'Manglende playlist-ID eller token (proxy kører muligvis ikke).';
     return;
   }
   try{
-    const tracks = await getAllPlaylistTracks(id, token);
+    const keep = keepNoPreview.checked;
+    const tracks = await getAllPlaylistTracks(id, state.token);
     let normalized = tracks.map(normalizeTrack).filter(Boolean);
-    // Filtrér tracks uden preview (standard)
-    normalized = normalized.filter(t => !!t.preview_url);
+    if (!keep){
+      normalized = normalized.filter(t => !!t.preview_url);
+    }
     normalized = dedupeById(normalized);
     if (!normalized.length){
       importStatus.textContent = 'Ingen brugbare tracks fundet.';
@@ -343,11 +331,29 @@ document.getElementById('runImportBtn')?.addEventListener('click', async (e) => 
     newGame();
     prepareDownload(normalized);
     importStatus.textContent = `Importeret ${normalized.length} tracks. Klar til spil.`;
-    document.getElementById('importModal').close();
+    importModal.close();
   }catch(err){
     importStatus.textContent = 'Fejl: ' + (err?.message || err);
   }
 });
+
+// Henter token fra proxy hvis vi ikke har et manuelt
+async function ensureToken(){
+  if (state.token) return state.token;
+  try{
+    const r = await fetch(AUTO_TOKEN_URL, {cache:'no-store'});
+    if(!r.ok) throw new Error('Proxy svarer ikke ('+r.status+')');
+    const j = await r.json();
+    state.token = j.access_token || null;
+    // Gem i settings for bekvemmelighed
+    const saved = JSON.parse(localStorage.getItem('rockquiz.settings') || '{}');
+    localStorage.setItem('rockquiz.settings', JSON.stringify({ ...saved, token: state.token }));
+    return state.token;
+  }catch(e){
+    console.warn('Kunne ikke hente auto-token:', e.message || e);
+    return null;
+  }
+}
 
 function extractPlaylistId(input){
   if(!input) return null;
@@ -405,8 +411,8 @@ function prepareDownload(tracks){
 }
 
 function downloadTracksJson(){
-  const href = els.downloadBtn?.dataset.href;
-  const filename = els.downloadBtn?.dataset.filename || 'tracks.json';
+  const href = els.downloadBtn.dataset.href;
+  const filename = els.downloadBtn.dataset.filename || 'tracks.json';
   if(!href){
     const blob = new Blob([JSON.stringify({tracks: state.tracks}, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
