@@ -77,7 +77,7 @@
             <button id="downloadBtn" class="btn" disabled>Download tracks.json</button>
           </div>
         </div>
-        <p class="muted">Du kan udskifte <code>tracks.json</code> med dine egne Spotify IDs—eller brug <em>Importer playlist</em>.</p>
+        <p class="muted">Brug <em>Importer playlist</em> eller læg en <code>tracks.json</code> i mappen.</p>
         <div id="trackList" class="tracklist"></div>
       </section>
     </main>
@@ -93,7 +93,7 @@
     <form method="dialog" class="modal">
       <h3>Indstillinger</h3>
       <label class="field">
-        <span>Spotify token (kopiér fra Spotify Console)</span>
+        <span>Spotify token (valgfrit – proxy bruges automatisk)</span>
         <input type="password" id="tokenInput" placeholder="Bearer token…">
       </label>
       <label class="field">
@@ -108,7 +108,7 @@
         <button value="cancel" class="btn ghost">Luk</button>
         <button id="saveSettingsBtn" value="default" class="btn primary">Gem</button>
       </menu>
-      <p class="muted small">Token gemmes i din browser (localStorage).</p>
+      <p class="muted small">Token gemmes i din browser (localStorage). Hvis tomt, hentes automatisk fra <code>http://localhost:8787/token</code>.</p>
     </form>
   </dialog>
 
@@ -117,10 +117,9 @@
     <form method="dialog" class="modal">
       <h3>Hjælp</h3>
       <ol>
-        <li>Åbn <strong>Spotify Web API Console</strong> for endpointet <em>Get Several Tracks</em> eller <em>Get Track</em>.</li>
-        <li>Tryk <em>Get Token</em> ➜ kopier <em>Access Token</em>.</li>
-        <li>Indsæt token i Indstillinger her i appen.</li>
-        <li>Brug <em>Importer playlist</em> eller læg en <code>tracks.json</code>.</li>
+        <li>Kør den lokale token‑proxy (se mappen <code>auto-token-proxy</code>).</li>
+        <li>Klik <em>Importer playlist</em> for at hente tracks fra en offentlig Spotify‑playlist.</li>
+        <li>Du kan også indsætte et token manuelt i <em>Indstillinger</em>.</li>
       </ol>
       <p class="muted small">OBS: Ikke alle sange har <code>preview_url</code>.</p>
       <menu class="menu">
@@ -136,14 +135,6 @@
       <label class="field">
         <span>Playlist URL eller ID</span>
         <input type="text" id="playlistInput" placeholder="https://open.spotify.com/playlist/37i9dQZF... eller kun ID">
-      </label>
-      <label class="field">
-        <span>Access Token (fra Spotify Console)</span>
-        <input type="password" id="importTokenInput" placeholder="Bearer token…">
-      </label>
-      <label class="inline">
-        <input type="checkbox" id="keepNoPreview">
-        Medtag tracks uden preview (fravælges som standard)
       </label>
       <menu class="menu">
         <button value="cancel" class="btn ghost">Luk</button>

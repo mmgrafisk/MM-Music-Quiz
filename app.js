@@ -1,4 +1,6 @@
-// Rock Quiz – Lokal (ingen login) + Importer playlist i browseren.
+// Rock Quiz – Lokal (ingen login) + Importer playlist + Auto-token fallback (localhost:8787/token).
+const AUTO_TOKEN_URL = 'http://localhost:8787/token';
+
 const state = {
   token: null,
   tracks: [],
@@ -45,8 +47,6 @@ const timeLimitInput = document.getElementById('timeLimitInput');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 
 const playlistInput = document.getElementById('playlistInput');
-const importTokenInput = document.getElementById('importTokenInput');
-const keepNoPreview = document.getElementById('keepNoPreview');
 const runImportBtn = document.getElementById('runImportBtn');
 const importStatus = document.getElementById('importStatus');
 
@@ -80,15 +80,13 @@ async function init(){
   els.settingsBtn.addEventListener('click', () => settingsModal.showModal());
   els.helpBtn.addEventListener('click', () => helpModal.showModal());
   els.importBtn.addEventListener('click', () => {
-    importTokenInput.value = state.token || '';
     playlistInput.value = '';
-    keepNoPreview.checked = false;
     importStatus.textContent = '';
     importModal.showModal();
   });
-  els.downloadBtn.addEventListener('click', downloadTracksJson);
+  els.downloadBtn?.addEventListener('click', downloadTracksJson);
 
-  saveSettingsBtn.addEventListener('click', (e)=> {
+  saveSettingsBtn.addEventListener('click', async (e)=> {
     e.preventDefault();
     const token = tokenInput.value.trim();
     const trounds = parseInt(roundsInput.value, 10) || 10;
@@ -109,6 +107,22 @@ async function init(){
 
 function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
+async function ensureToken(){
+  if (state.token) return state.token;
+  try{
+    const r = await fetch(AUTO_TOKEN_URL, {cache: 'no-store'});
+    if(!r.ok) throw new Error('Proxy svarede ikke');
+    const j = await r.json();
+    state.token = j.access_token;
+    const saved = JSON.parse(localStorage.getItem('rockquiz.settings') || '{}');
+    localStorage.setItem('rockquiz.settings', JSON.stringify({...saved, token: state.token}));
+    return state.token;
+  }catch(e){
+    console.warn('Auto-token fejlede:', e.message || e);
+    return null;
+  }
+}
+
 async function loadTracks(){
   try{
     const res = await fetch('tracks.json', {cache:'no-store'});
@@ -127,10 +141,10 @@ async function loadTracks(){
 function renderTrackList(){
   els.trackList.innerHTML = '';
   if (!state.tracks.length){
-    els.downloadBtn.disabled = true;
+    els.downloadBtn?.setAttribute('disabled','');
     return;
   }
-  els.downloadBtn.disabled = false;
+  els.downloadBtn?.removeAttribute('disabled');
   state.tracks.forEach(t => {
     const item = document.createElement('div');
     item.className = 'trackitem';
@@ -305,18 +319,20 @@ document.getElementById('runImportBtn')?.addEventListener('click', async (e) => 
   e.preventDefault();
   importStatus.textContent = 'Henter playlist…';
   const id = extractPlaylistId(playlistInput.value.trim());
-  const token = (importTokenInput.value || '').trim();
-  if (!id || !token){
-    importStatus.textContent = 'Manglende playlist‑ID eller token.';
+  if (!id){
+    importStatus.textContent = 'Manglende playlist‑ID/URL.';
+    return;
+  }
+  const token = (state.token || await ensureToken());
+  if (!token){
+    importStatus.textContent = 'Intet token (proxy kører måske ikke).';
     return;
   }
   try{
-    const keep = keepNoPreview.checked;
     const tracks = await getAllPlaylistTracks(id, token);
     let normalized = tracks.map(normalizeTrack).filter(Boolean);
-    if (!keep){
-      normalized = normalized.filter(t => !!t.preview_url);
-    }
+    // Filtrér tracks uden preview (standard)
+    normalized = normalized.filter(t => !!t.preview_url);
     normalized = dedupeById(normalized);
     if (!normalized.length){
       importStatus.textContent = 'Ingen brugbare tracks fundet.';
@@ -389,8 +405,8 @@ function prepareDownload(tracks){
 }
 
 function downloadTracksJson(){
-  const href = els.downloadBtn.dataset.href;
-  const filename = els.downloadBtn.dataset.filename || 'tracks.json';
+  const href = els.downloadBtn?.dataset.href;
+  const filename = els.downloadBtn?.dataset.filename || 'tracks.json';
   if(!href){
     const blob = new Blob([JSON.stringify({tracks: state.tracks}, null, 2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
