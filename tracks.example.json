@@ -1,0 +1,25 @@
+{
+  "tracks": [
+    {
+      "id": "4VqPOruhp5EdPBeR92t6lQ",
+      "name": "Take On Me",
+      "artist": "a-ha",
+      "preview_url": "",
+      "cover": ""
+    },
+    {
+      "id": "2d8JP84HNLKhmd6IYOoupQ",
+      "name": "Africa",
+      "artist": "TOTO",
+      "preview_url": "",
+      "cover": ""
+    },
+    {
+      "id": "1jJci4qxiYcOHhQR247rEU",
+      "name": "Wonderwall",
+      "artist": "Oasis",
+      "preview_url": "",
+      "cover": ""
+    }
+  ]
+}
